@@ -10,9 +10,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import mobappdev.example.nback_cimpl.ui.viewmodels.GameState
 import mobappdev.example.nback_cimpl.ui.viewmodels.GameVM
 import mobappdev.example.nback_cimpl.ui.viewmodels.GameViewModel
@@ -28,16 +30,18 @@ fun SettingsButtons(vm: GameViewModel, gameState: GameState) {
         val showTimeDialog = remember { mutableStateOf(false) }
         val showEventDialog = remember { mutableStateOf(false) }
 
-        val nInput = rememberSaveable { mutableStateOf(vm.nBack.toString()) }
-        val timeInput = rememberSaveable { mutableStateOf(vm.timeBetweenEvents.toString()) }
-        val eventInput = rememberSaveable { mutableStateOf(vm.numEvents.toString()) }
+        val nInput = rememberSaveable { mutableStateOf(vm.nBack.value.toString()) }
+        val timeInput = rememberSaveable { mutableStateOf(vm.timeBetweenEvents.value.toString()) }
+        val eventInput = rememberSaveable { mutableStateOf(vm.numEvents.value.toString()) }
+
+        val scope = rememberCoroutineScope()
 
         // N button
         Button(
             onClick = { showNDialog.value = true },
             enabled = gameState.eventValue == NO_EVENT
         ) {
-            Text("N = ${vm.nBack}")
+            Text("N = ${vm.nBack.value}")
         }
 
         // Time button
@@ -45,7 +49,7 @@ fun SettingsButtons(vm: GameViewModel, gameState: GameState) {
             onClick = { showTimeDialog.value = true },
             enabled = gameState.eventValue == NO_EVENT
         ) {
-            Text("Time = ${vm.timeBetweenEvents}s")
+            Text("Time = ${vm.timeBetweenEvents.value}s")
         }
 
         // Event count button
@@ -53,7 +57,7 @@ fun SettingsButtons(vm: GameViewModel, gameState: GameState) {
             onClick = { showEventDialog.value = true },
             enabled = gameState.eventValue == NO_EVENT
         ) {
-            Text("Events = ${vm.numEvents}")
+            Text("Events = ${vm.numEvents.value}")
         }
 
         // --- Dialog for N-back value ---
@@ -73,8 +77,10 @@ fun SettingsButtons(vm: GameViewModel, gameState: GameState) {
                     TextButton(onClick = {
                         val n = nInput.value.toIntOrNull()
                         if (n != null && n > 0 && vm is GameVM) {
-                            vm.setNBack(n)
-                            showNDialog.value = false
+                            scope.launch {
+                                vm.setNBack(n)
+                                showNDialog.value = false
+                            }
                         }
                     }) { Text("OK") }
                 },
@@ -99,10 +105,12 @@ fun SettingsButtons(vm: GameViewModel, gameState: GameState) {
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        val t = timeInput.value.toLongOrNull()
+                        val t = timeInput.value.toIntOrNull()
                         if (t != null && t > 0 && vm is GameVM) {
-                            vm.setTimeBetweenEvents(t)
-                            showTimeDialog.value = false
+                            scope.launch {
+                                vm.setTimeBetweenEvents(t)
+                                showTimeDialog.value = false
+                            }
                         }
                     }) { Text("OK") }
                 },
@@ -129,8 +137,10 @@ fun SettingsButtons(vm: GameViewModel, gameState: GameState) {
                     TextButton(onClick = {
                         val e = eventInput.value.toIntOrNull()
                         if (e != null && e > 0 && vm is GameVM) {
-                            vm.setNumEvents(e)
-                            showEventDialog.value = false
+                            scope.launch {
+                                vm.setNumEvents(e)
+                                showEventDialog.value = false
+                            }
                         }
                     }) { Text("OK") }
                 },

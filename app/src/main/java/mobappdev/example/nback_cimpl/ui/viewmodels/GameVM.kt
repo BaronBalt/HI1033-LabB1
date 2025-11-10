@@ -1,5 +1,6 @@
 package mobappdev.example.nback_cimpl.ui.viewmodels
 
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -16,6 +17,8 @@ import kotlinx.coroutines.launch
 import mobappdev.example.nback_cimpl.GameApplication
 import mobappdev.example.nback_cimpl.NBackHelper
 import mobappdev.example.nback_cimpl.data.UserPreferencesRepository
+import java.util.Locale
+import kotlin.math.absoluteValue
 
 /**
  * This is the GameViewModel.
@@ -37,9 +40,9 @@ interface GameViewModel {
     val gameState: StateFlow<GameState>
     val score: StateFlow<Int>
     val highscore: StateFlow<Int>
-    val nBack: Int
-    val timeBetweenEvents: Long
-    val numEvents: Int
+    val nBack: StateFlow<Int>
+    val timeBetweenEvents: StateFlow<Int>
+    val numEvents: StateFlow<Int>
 
     fun setGameType(gameType: GameType)
     fun startGame()
@@ -47,8 +50,10 @@ interface GameViewModel {
 }
 
 class GameVM(
+    private val app: GameApplication,
     private val userPreferencesRepository: UserPreferencesRepository
-) : GameViewModel, ViewModel() {
+) : GameViewModel, ViewModel(), TextToSpeech.OnInitListener {
+    private var tts: TextToSpeech? = null
 
     private val _gameState = MutableStateFlow(GameState())
     override val gameState: StateFlow<GameState> get() = _gameState.asStateFlow()
@@ -59,14 +64,14 @@ class GameVM(
     private val _highscore = MutableStateFlow(0)
     override val highscore: StateFlow<Int> get() = _highscore
 
-    private var _nBack = 2
-    override val nBack: Int get() = _nBack
+    private val _nBack = MutableStateFlow(2) // TODO: FIX THESE THEY DONT SAVE
+    override val nBack: StateFlow<Int> get() = _nBack
 
-    private val _timeBetweenEvents = MutableStateFlow(1L) // seconds
-    override val timeBetweenEvents: Long get() = _timeBetweenEvents.value
+    private var _timeBetweenEvents = MutableStateFlow(2)
+    override val timeBetweenEvents: StateFlow<Int> get() = _timeBetweenEvents
 
-    private val _numEvents = MutableStateFlow(10)
-    override val numEvents: Int get() = _numEvents.value
+    private var _numEvents = MutableStateFlow(10)
+    override val numEvents: StateFlow<Int> get() = _numEvents
 
     private var job: Job? = null
     private val nBackHelper = NBackHelper()
@@ -85,7 +90,7 @@ class GameVM(
         matchRegistered = false
 
         events = nBackHelper
-            .generateNBackString(numEvents, 9, 30, nBack)
+            .generateNBackString(numEvents.value, 9, 30, nBack.value)
             .toList()
             .toTypedArray()
 
@@ -104,10 +109,10 @@ class GameVM(
     }
 
     override fun checkMatch() {
-        if (currentIndex < nBack || matchRegistered) return
+        if (currentIndex < nBack.value || matchRegistered) return
 
         val current = events[currentIndex]
-        val previous = events[currentIndex - nBack]
+        val previous = events[currentIndex - nBack.value]
 
         if (current == previous) {
             _score.value++
@@ -125,8 +130,25 @@ class GameVM(
         matchRegistered = true
     }
 
-    private fun runAudioGame() {
-        // Todo: Make work for Basic grade
+    private suspend fun runAudioGame() {
+        for ((index, value) in events.withIndex()) {
+            currentIndex = index
+            matchRegistered = false
+
+            val letter = ('A' + (value - 1)).toString() // Convert 1–9 to A–I
+            _gameState.value = _gameState.value.copy(eventValue = value)
+
+            // Speak the letter
+            tts?.speak(letter, TextToSpeech.QUEUE_FLUSH, null, null)
+            Log.d("GameVM", "Speaking letter: $letter (index $index)")
+
+            // Wait for event duration
+            delay(timeBetweenEvents.value * 1000L)
+            _gameState.value = _gameState.value.copy(eventValue = 0)
+            delay(timeBetweenEvents.value * 1000L)
+        }
+
+        Log.d("GameVM", "Audio game finished with score ${_score.value}")
     }
 
     private fun runAudioVisualGame() {
@@ -141,9 +163,9 @@ class GameVM(
             _gameState.value = _gameState.value.copy(eventValue = value)
             Log.d("GameVM", "Showing event $value (index $index)")
 
-            delay(timeBetweenEvents * 1000L) // use user-configurable time
+            delay(timeBetweenEvents.value * 1000L) // use user-configurable time
             _gameState.value = _gameState.value.copy(eventValue = 0)
-            delay(timeBetweenEvents * 1000L)
+            delay(timeBetweenEvents.value * 1000L)
         }
 
         Log.d("GameVM", "Game finished with score ${_score.value}")
@@ -155,33 +177,63 @@ class GameVM(
         }
     }
 
-    fun setNBack(value: Int) {
-        _nBack = value
+    suspend fun setNBack(value: Int) {
+        _nBack.value = value
+        userPreferencesRepository.saveNBack(_nBack.value)
     }
 
-    fun setTimeBetweenEvents(seconds: Long) {
+    suspend fun setTimeBetweenEvents(seconds: Int) {
         _timeBetweenEvents.value = seconds
+        userPreferencesRepository.saveTimeBetween(_timeBetweenEvents.value)
     }
 
-    fun setNumEvents(count: Int) {
+    suspend fun setNumEvents(count: Int) {
         _numEvents.value = count
+        userPreferencesRepository.saveEvents(_numEvents.value)
     }
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = (this[APPLICATION_KEY] as GameApplication)
-                GameVM(application.userPreferencesRespository)
+                GameVM(
+                    app = application,
+                    userPreferencesRepository = application.userPreferencesRespository
+                )
             }
         }
     }
 
+
     init {
+        tts = TextToSpeech(app.applicationContext, this)
+
         viewModelScope.launch {
             userPreferencesRepository.highscore.collect {
                 _highscore.value = it
             }
+            userPreferencesRepository.nBack.collect {
+                _nBack.value = it
+            }
+            userPreferencesRepository.timeBetween.collect {
+                _timeBetweenEvents.value = it
+            }
+            userPreferencesRepository.events.collect {
+                _numEvents.value = it
+            }
         }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale.US
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        tts?.stop()
+        tts?.shutdown()
     }
 }
 
@@ -204,9 +256,9 @@ class FakeVM : GameViewModel {
     override val gameState = MutableStateFlow(GameState()).asStateFlow()
     override val score = MutableStateFlow(2).asStateFlow()
     override val highscore = MutableStateFlow(42).asStateFlow()
-    override val nBack = 2
-    override val timeBetweenEvents = 1L
-    override val numEvents = 10
+    override val nBack = MutableStateFlow(2).asStateFlow()
+    override val timeBetweenEvents = MutableStateFlow(2).asStateFlow()
+    override val numEvents = MutableStateFlow(10).asStateFlow()
 
     override fun setGameType(gameType: GameType) {}
     override fun startGame() {}

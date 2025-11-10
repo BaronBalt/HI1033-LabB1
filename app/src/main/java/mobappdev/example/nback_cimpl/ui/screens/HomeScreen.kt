@@ -1,5 +1,6 @@
 package mobappdev.example.nback_cimpl.ui.screens
 
+import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -118,7 +119,12 @@ fun HomeScreen(vm: GameViewModel) {
                                 VisualGrid(gameState = gameState, gridSize = gridSize)
 
                             gameState.gameType == GameType.Audio -> {
-                                // Todo: Implement Audio version of game
+                                val letter = if (gameState.eventValue > 0) ('A' + (gameState.eventValue - 1)).toString() else ""
+                                Text(
+                                    text = letter,
+                                    style = MaterialTheme.typography.displayLarge,
+                                    textAlign = TextAlign.Center
+                                )
                             }
 
                             gameState.gameType == GameType.AudioVisual -> {

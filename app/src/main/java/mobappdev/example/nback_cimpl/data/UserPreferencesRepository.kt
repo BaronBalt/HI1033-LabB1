@@ -31,6 +31,9 @@ class UserPreferencesRepository (
 ){
     private companion object {
         val HIGHSCORE = intPreferencesKey("highscore")
+        val NBACK = intPreferencesKey("nBack")
+        val TIMEBETWEEN = intPreferencesKey("timeBetween")
+        val EVENTS = intPreferencesKey("events")
         const val TAG = "UserPreferencesRepo"
     }
 
@@ -50,6 +53,63 @@ class UserPreferencesRepository (
     suspend fun saveHighScore(score: Int) {
         dataStore.edit { preferences ->
             preferences[HIGHSCORE] = score
+        }
+    }
+
+    val nBack: Flow<Int> = dataStore.data
+        .catch {
+            if (it is IOException) {
+                Log.e(TAG, "Error reading preferences", it)
+                emit(emptyPreferences())
+            } else {
+                throw it
+            }
+        }
+        .map { preferences ->
+            preferences[NBACK] ?: 2
+        }
+
+    suspend fun saveNBack(value: Int) {
+        dataStore.edit { preferences ->
+            preferences[NBACK] = value
+        }
+    }
+
+    val timeBetween: Flow<Int> = dataStore.data
+        .catch {
+            if (it is IOException) {
+                Log.e(TAG, "Error reading preferences", it)
+                emit(emptyPreferences())
+            } else {
+                throw it
+            }
+        }
+        .map { preferences ->
+            preferences[TIMEBETWEEN] ?: 2
+        }
+
+    suspend fun saveTimeBetween(value: Int) {
+        dataStore.edit { preferences ->
+            preferences[TIMEBETWEEN] = value
+        }
+    }
+
+    val events: Flow<Int> = dataStore.data
+        .catch {
+            if (it is IOException) {
+                Log.e(TAG, "Error reading preferences", it)
+                emit(emptyPreferences())
+            } else {
+                throw it
+            }
+        }
+        .map { preferences ->
+            preferences[EVENTS] ?: 2
+        }
+
+    suspend fun saveEvents(value: Int) {
+        dataStore.edit { preferences ->
+            preferences[EVENTS] = value
         }
     }
 }
